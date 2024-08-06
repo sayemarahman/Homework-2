@@ -1,0 +1,222 @@
+---
+title: "Project 2 Stat4360"
+output: pdf_document
+date: "2024-02-12"
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+
+```{r}
+library(ggplot2)
+wine <- read.table("~/wine.txt", header = T, sep = '')
+#View(wine)
+```
+
+```{r}
+head(wine)
+attach(wine)
+```
+Question 1:
+(a)  Perform an exploratory analysis of data. Comment on findings that interest you.
+```{r}
+# make the full model of the data
+full <- lm(Quality~Clarity + Aroma + Body + Flavor + Oakiness + Region)
+summary(full)
+# make a reduced model from the full model
+reduce <- lm(Quality~Aroma + Flavor + Oakiness)
+summary(reduce)
+# confidence interval
+confint(reduce, level = 0.95)
+data <- data.frame(Aroma = 3.4, Flavor = 3.2, Oakiness = 4.2)
+predict(reduce, newData = data, interval = 'predict') 
+# make a correlation
+correlation = cor(wine[,c("Quality", "Clarity", "Aroma", "Body", "Flavor", "Oakiness")])
+print(correlation)
+# make a scatter plot
+pairs(wine[, -7], main = " Scatterplots")
+summary(wine)
+```
+(b) Do part (a) of Exercise 15 in Chapter 3 for these data.
+For each predictor, fit a simple linear regression model to predict
+the response. Describe your results. In which of the models is
+there a statistically significant association between the predictor
+and the response? Create some plots to back up your assertions.
+```{r}
+predictors <- c("Clarity", "Aroma", "Body", "Flavor", "Oakiness", "Region")
+significant_predictors <- c()
+# making the plots to find a correlation
+for (predictor in predictors) {
+  model <- lm(Quality ~ get(predictor), data = wine)
+  summary_model <- summary(model)
+  
+  # Display results
+  cat("\n\n=== Simple Linear Regression for", predictor, "===\n")
+  print(summary_model)
+  
+  # Check for statistical significance (p-value < 0.05)
+  if (summary_model$coefficients[2, "Pr(>|t|)"] < 0.05) {
+    significant_predictors <- c(significant_predictors, predictor)
+  }
+  
+  # Create scatter plots
+  plot(wine[[predictor]], wine$Quality, main = paste("Scatter plot for", predictor),
+       xlab = predictor, ylab = "Quality")
+  abline(model, col = "red")
+}
+Quality_Aroma = lm(wine$Quality ~ wine$Aroma)
+summary(Quality_Aroma)
+Quality_Body = lm(wine$Quality ~ wine$Body)
+summary(Quality_Body)
+Quality_Flavor = lm(wine$Quality ~ wine$Flavor)
+summary(Quality_Flavor)
+Quality_Oakiness = lm(wine$Quality ~ wine$Oakiness)
+summary(Quality_Oakiness)
+Quality_Region = lm(wine$Quality ~ wine$Region)
+summary(Quality_Region)
+
+```
+(c) Do part (b) of Exercise 15 in Chapter 3 for these data.
+Fit a multiple regression model to predict the response using
+all of the predictors. Describe your results. For which predictors
+can we reject the null hypothesis H0 : βj = 0?
+```{r}
+# Multiple Regression Model
+multiple_model <- lm(Quality ~ Clarity + Aroma + Body + Flavor + Oakiness + Region, data = wine)
+summary_multiple_model <- summary(multiple_model)
+
+# Display results for multiple regression
+cat("\nMultiple Regression Model\n")
+print(summary_multiple_model)
+
+# Check for significant predictors (p-value < 0.05)
+significant_predictors_multiple <- names(which(summary_multiple_model$coefficients[, "Pr(>|t|)"] < 0.05))
+
+# Diagnostic plots for multiple regression
+par(mfrow = c(2, 2))
+plot(multiple_model)
+
+# Display significant predictors in the multiple regression model
+cat("\nSignificant predictors in the multiple regression model:", paste(significant_predictors_multiple, collapse = ", "), "\n")
+# because less than 0.05 i got flavor and oakiness as the two significant predictions both having a positive direction of association and I can reject the null hypothesis for these two predictors
+```
+(d) Based on your observation in (b) and (c), build a “reasonably good” multiple
+regression model for these data. Be sure to explore interactions of Region with 
+other predictors. Carefully justify all the choices you make in building the 
+model and verify the model assumptions.
+```{r}
+reduced_model <- lm(Quality~Aroma + Flavor + Oakiness)
+summary(reduced_model)
+confint(reduced_model, level = 0.95)
+df = data.frame(Aroma = 3.4, Flavor = 3.2, Oakiness = 4.2)
+predict(reduced_model, newdata = df, interval = 'predict')
+anova(reduced_model)
+summary(reduced_model)
+```
+(e) Write the final model in equation form, being careful to handle the 
+qualitative predictors and interactions (if any) properly.
+(f) Use the final model to predict the Quality of a wine from Region 1 with other predictors set
+equal to their sample means. Also provide a 95% prediction interval for the response and a 95%
+confidence interval for the mean response. Interpret the results.
+```{r}
+# calculating mean values
+aroma_mean <- mean(wine$Aroma[wine$Region == 1], na.rm = TRUE)
+print(aroma_mean)
+flavor_mean <- mean(wine$Flavor[wine$Region == 1], na.rm = TRUE)
+print(flavor_mean)
+oakiness_mean <- mean(wine$Oakiness[wine$Region == 1], na.rm = TRUE)
+print(oakiness_mean)
+
+intercept = 6.4672
+aroma_coeff = 0.5801
+flavor_coeff = 1.1997
+oakiness_coeff = -0.6023
+
+predicted_val = intercept + aroma_coeff*aroma_mean + flavor_coeff*flavor_mean + oakiness_coeff*oakiness_mean
+print(predicted_val)
+
+# standard error
+residualStandardError = summary(reduced_model)$sigma
+SE_predict = residualStandardError * sqrt(1+sum(c((aroma_mean - mean(wine$Aroma))^2,
+                                                  (flavor_mean - mean(wine$Flavor))^2,
+                                                (oakiness_mean -  mean(wine$Oakiness))^2)))
+
+# 95 percent prediction interval
+df_residual <- summary(reduced_model)$df[3]
+t_val = qt(0.975, df_residual)
+error_margin = t_val * SE_predict
+prediction_interval = c(predicted_val - error_margin, predicted_val + error_margin)
+print(prediction_interval)
+
+# 95 percent confidence interval
+mean_response = SE_predict / sqrt(length(wine$Quality[wine$Region == 1]))
+t_mean = qt(0.975, df_residual)
+error_margin_mean = t_mean * mean_response
+conf_interval_mean = c(predicted_val - error_margin_mean, predicted_val + error_margin_mean)
+print(conf_interval_mean)
+```
+# Question 2
+```{r}
+diabetes <- read.csv2("C:/Users/sayem/Downloads/diabetes.csv", sep="")
+str(diabetes)
+summary(diabetes)
+colnames(diabetes) <- gsub("\\.\\.", "", colnames(diabetes))
+names(diabetes)
+correlation_matrix = cor(diabetes [, c("Pregnancies", "Glucose", "BloodPressure",
+"SkinThickness", "Insulin", "BMI", "DiabetesPedigreeFunction", "Age", "Outcome")])
+print(correlation_matrix)
+pairs(diabetes[, -10], main = "Scatterplot Matrix")
+
+
+```
+Part B
+```{r}
+lda_model = lda(Outcome ~ ., data = diabetes)
+lda_predictions <- predict(lda_model, diabetes)
+matrix <- table(Actual = diabetes$Outcome, Predicted = lda_predictions$class)
+
+# Calculate sensitivity, specificity, and misclassification rate
+sensitivity <- matrix[2, 2] / sum(diabetes$Outcome == 1)
+specificity <- matrix[1, 1] / sum(diabetes$Outcome == 0)
+misclassification_rate <- (matrix[1, 2] + matrix[2, 1]) / sum(matrix)
+
+# Print the confusion matrix and metrics
+print(matrix)
+cat("Sensitivity:", sensitivity, "\n")
+cat("Specificity:", specificity, "\n")
+cat("Misclassification Rate:", misclassification_rate, "\n")
+
+# Plot ROC curve
+library(pROC)
+rocCurve <- roc(diabetes$Outcome, lda_predictions$posterior[, 2])
+par(mfrow = c(1,1))
+plot(rocCurve, main = "ROC Curve for LDA", col = "blue", lwd = 2)
+```
+Part C
+```{r}
+# libraries
+library(MASS)
+library(pROC)
+
+# Perform QDA
+model <- qda(Outcome ~ ., data = diabetes)
+# Make predictions
+qda_predic <- predict(model, diabetes)
+# Compute confusion matrix
+conf_matrix_qda <- table(Actual = diabetes$Outcome, Predicted = qda_predictions$class)
+
+sensitivity_qda = conf_matrix_qda[2, 2] / sum(diabetes$Outcome == 1)
+specificity_qda = conf_matrix_qda[1, 1] / sum(diabetes$Outcome == 0)
+misclassification_rate_qda =
+(conf_matrix_qda[1, 2] + conf_matrix_qda[2, 1]) / sum(conf_matrix_qda)
+# Print confusion matrix and metrics for QDA
+print(conf_matrix_qda)
+cat("Sensitivity (QDA):", sensitivity_qda, "\n")
+cat("Specificity (QDA):", specificity_qda, "\n")
+cat("Misclassification Rate (QDA):", misclassification_rate_qda, "\n")
+# Plot ROC curve for QDA
+roc_curve <- roc(diabetes$Outcome, qda_predict$posterior[, 2])
+plot(roc_curve, main = "ROC Curve for QDA", col = "blue", lwd = 2)
+```
